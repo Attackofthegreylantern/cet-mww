@@ -1,0 +1,4 @@
+interface:
+  display_name: "CET MWW"
+  short_description: "四六级智能查词，并维护本地结构化 Markdown 单词本"
+  default_prompt: "Use $cet-mww to explain substantial and save it to my CET wordbook."

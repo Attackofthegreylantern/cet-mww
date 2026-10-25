@@ -1,0 +1,20 @@
+{
+  "name": "cet-mww-local",
+  "interface": {
+    "displayName": "CET MWW Local"
+  },
+  "plugins": [
+    {
+      "name": "cet-mww",
+      "source": {
+        "source": "local",
+        "path": "./plugins/cet-mww"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
