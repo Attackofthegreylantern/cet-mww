@@ -1,16 +1,16 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "cet-mww",
-  "version": "1.0.0",
-  "description": "A private CET-4/CET-6 dictionary workflow with a local Markdown lexicon.",
+  "version": "1.4.0",
+  "description": "A private CET-4/CET-6 dictionary workflow with a local Word and Markdown lexicon.",
   "keywords": ["CET-4", "CET-6", "vocabulary", "dictionary"],
   "extensions": {
     "com.openai": {
       "requires_local_executor": true,
       "interface": {
         "displayName": "CET My Word World",
-        "shortDescription": "四六级智能查词与本地 Markdown 单词本",
-        "longDescription": "在本地 ChatGPT Desktop 对话中解释四六级词汇，并把统一格式的词条安全保存到个人 Markdown 单词本。",
+        "shortDescription": "四六级智能查词与自动更新的 Word 单词本",
+        "longDescription": "在本地 ChatGPT Desktop 对话中解释四六级词汇，并自动更新个人 Word 单词本，保留 Markdown 副本。",
         "developerName": "Personal",
         "category": "Productivity",
         "capabilities": ["Read", "Write"],

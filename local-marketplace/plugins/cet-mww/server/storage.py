@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+from word_export import is_current as word_is_current, render_word
+
 
 SCHEMA_VERSION = 1
 DEFAULT_DATA_DIR = Path("~/Desktop/CET-Lexicon").expanduser()
@@ -58,6 +60,7 @@ class LexiconStore:
         self.data_dir = Path(configured).expanduser().resolve()
         self.json_path = self.data_dir / "vocabulary.json"
         self.markdown_path = self.data_dir / "CET-Lexicon.md"
+        self.word_path = self.data_dir / "CET-Lexicon.docx"
         self.backup_path = self.data_dir / "vocabulary.json.bak"
         self.lock_path = self.data_dir / ".vocabulary.lock"
 
@@ -125,11 +128,14 @@ class LexiconStore:
         return {"level": level, "year": year, "month": month, "set_number": set_number}
 
     def _atomic_text(self, path: Path, text: str) -> None:
+        self._atomic_bytes(path, text.encode("utf-8"))
+
+    def _atomic_bytes(self, path: Path, content: bytes) -> None:
         fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=self.data_dir)
         temporary_path = Path(temporary_name)
         try:
-            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
-                handle.write(text)
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(content)
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(temporary_path, path)
@@ -142,18 +148,41 @@ class LexiconStore:
         data["updated_at"] = now_iso()
         json_text = json.dumps(data, ensure_ascii=False, indent=2, sort_keys=False) + "\n"
         markdown_text = render_markdown(data)
+        word_bytes = render_word(data)
+        self._check_word_lock()
         if make_backup and self.json_path.exists():
             backup_tmp = self.backup_path.with_suffix(".bak.tmp")
             shutil.copy2(self.json_path, backup_tmp)
             os.replace(backup_tmp, self.backup_path)
         self._atomic_text(self.json_path, json_text)
-        self._atomic_text(self.markdown_path, markdown_text)
+        try:
+            self._write_word(word_bytes)
+            self._atomic_text(self.markdown_path, markdown_text)
+        except OSError as exc:
+            raise LexiconError(f"词条数据已保存到 JSON，但阅读文件刷新失败：{exc}。关闭 Word 后重新读取单词本可重试。") from exc
+
+    def _check_word_lock(self) -> None:
+        # Microsoft Word uses this owner file while the document is open.
+        if any((self.data_dir / name).exists() for name in ("~$CET-Lexicon.docx", "~$T-Lexicon.docx")):
+            raise LexiconError("请先关闭 Word 中的 CET-Lexicon.docx，再保存词条；本次没有修改词库。")
+
+    def _write_word(self, content: bytes) -> None:
+        if self.word_path.exists():
+            self._atomic_bytes(self.data_dir / "CET-Lexicon.docx.bak", self.word_path.read_bytes())
+        self._atomic_bytes(self.word_path, content)
+
+    def _refresh_reading_files(self, data: dict[str, Any]) -> None:
+        if not word_is_current(self.word_path, data):
+            self._check_word_lock()
+            self._write_word(render_word(data))
+        markdown = render_markdown(data)
+        if not self.markdown_path.exists() or self.markdown_path.read_text(encoding="utf-8") != markdown:
+            self._atomic_text(self.markdown_path, markdown)
 
     def initialize(self) -> dict[str, Any]:
         with self._locked():
             data = self._load_unlocked()
-            if not self.markdown_path.exists():
-                self._atomic_text(self.markdown_path, render_markdown(data))
+            self._refresh_reading_files(data)
             return self._status(data)
 
     def _status(self, data: dict[str, Any]) -> dict[str, Any]:
@@ -161,6 +190,7 @@ class LexiconStore:
             "data_dir": str(self.data_dir),
             "json_path": str(self.json_path),
             "markdown_path": str(self.markdown_path),
+            "word_path": str(self.word_path),
             "entry_count": len(data["entries"]),
             "current_exam": data.get("current_exam"),
             "updated_at": data.get("updated_at"),
@@ -268,12 +298,12 @@ class LexiconStore:
                 continue
             senses = list(matching.get("senses", []))
             for new_sense in new_group.get("senses", []):
-                sense_key = (_text_key(new_sense.get("zh", "")), _text_key(new_sense.get("en", "")))
+                sense_key = _text_key(new_sense.get("zh", ""))
                 old_sense = next(
                     (
                         sense
                         for sense in senses
-                        if (_text_key(sense.get("zh", "")), _text_key(sense.get("en", ""))) == sense_key
+                        if sense_key and _text_key(sense.get("zh", "")) == sense_key
                     ),
                     None,
                 )
@@ -301,8 +331,7 @@ class LexiconStore:
     ) -> dict[str, Any]:
         with self._locked():
             data = self._load_unlocked()
-            if not self.markdown_path.exists():
-                self._atomic_text(self.markdown_path, render_markdown(data))
+            self._refresh_reading_files(data)
             entries = data["entries"]
             if headword:
                 found_key = self._find_existing_key(data, normalize_headword(headword))

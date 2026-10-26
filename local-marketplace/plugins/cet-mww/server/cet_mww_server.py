@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from storage import LexiconError, LexiconStore  # noqa: E402
 
 
-SERVER_INFO = {"name": "cet-mww-storage", "version": "1.0.0"}
+SERVER_INFO = {"name": "cet-mww-storage", "version": "1.4.0"}
 
 
 TOOLS = [
@@ -34,7 +34,7 @@ TOOLS = [
     },
     {
         "name": "save_or_update_entry",
-        "description": "Atomically create or update one canonical dictionary entry, deduplicate it, link the active paper, and regenerate Markdown. Call only after an explicit lookup unless the user says not to save.",
+        "description": "Create or update one canonical dictionary entry, deduplicate it, link the active paper, and regenerate Word and Markdown. Close the Word document before saving. Call only after an explicit lookup unless the user says not to save.",
         "inputSchema": {
             "type": "object",
             "additionalProperties": False,
@@ -100,7 +100,7 @@ TOOLS = [
     },
     {
         "name": "read_lexicon",
-        "description": "Read lexicon status and entries, optionally filtered by headword or CET paper. Include Markdown when the user asks to open the notebook.",
+        "description": "Read lexicon status and entries, optionally filtered by headword or CET paper. Return word_path for the Word notebook. Include Markdown only when a text preview is needed. Reading can regenerate missing or stale reading files from JSON.",
         "inputSchema": {
             "type": "object",
             "additionalProperties": False,
@@ -119,7 +119,7 @@ TOOLS = [
                 "include_markdown": {"type": "boolean", "default": False},
             },
         },
-        "annotations": {"title": "Read CET lexicon", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True},
+        "annotations": {"title": "Read CET lexicon", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": True},
     },
 ]
 
@@ -145,14 +145,14 @@ def call_tool(store: LexiconStore, name: str, arguments: dict[str, Any]) -> dict
             save_to_current_exam=arguments.get("save_to_current_exam", True),
         )
         action = "新增" if result["created"] else "更新（未创建重复词条）"
-        return tool_result(result, f"已{action}：{result['headword']}。Markdown 已刷新。")
+        return tool_result(result, f"已{action}：{result['headword']}。Word 和 Markdown 已刷新。Word：{result['word_path']}")
     if name == "read_lexicon":
         result = store.read_lexicon(
             headword=arguments.get("headword"),
             exam=arguments.get("exam"),
             include_markdown=arguments.get("include_markdown", False),
         )
-        return tool_result(result, f"已读取 {len(result['entries'])} 个词条。Markdown：{result['markdown_path']}")
+        return tool_result(result, f"已读取 {len(result['entries'])} 个词条。Word：{result['word_path']}")
     raise LexiconError(f"未知工具: {name}")
 
 
@@ -176,7 +176,7 @@ def handle(store: LexiconStore, request: dict[str, Any]) -> dict[str, Any] | Non
         params = request.get("params", {})
         try:
             result = call_tool(store, params.get("name", ""), params.get("arguments", {}))
-        except (LexiconError, KeyError, TypeError, ValueError) as exc:
+        except (LexiconError, OSError, KeyError, TypeError, ValueError) as exc:
             result = {"content": [{"type": "text", "text": str(exc)}], "isError": True}
     else:
         return {"jsonrpc": "2.0", "id": request_id, "error": {"code": -32601, "message": f"Method not found: {method}"}}
