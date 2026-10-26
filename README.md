@@ -2,6 +2,18 @@
 
 一个仅在本机运行的 ChatGPT Desktop / Codex 个人插件：Skill 负责识别查词意图并生成统一词条，本地 stdio MCP 负责安全持久化。
 
+## Word 排版参考
+
+以下为 Microsoft Word 中的实际使用截图。
+
+**双栏正文**：词头、音标、编号释义、双语例句、常用搭配与试卷来源，栏间用细蓝线分隔。
+
+![Word 单词本双栏正文排版](docs/images/word-notebook-body.png)
+
+**目录与索引**：试卷目录和字母索引位于正文前，点击词头即可跳转到对应词条。
+
+![Word 单词本前置试卷目录与字母索引](docs/images/word-notebook-index.png)
+
 ## 能力边界
 
 - 支持本地运行的 ChatGPT Desktop Work/Codex 线程。
